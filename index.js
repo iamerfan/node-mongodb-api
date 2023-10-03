@@ -1,122 +1,287 @@
-const express = require('express')
+const express = require("express");
+const { ConnectToDatabase } = require("./connectMongo");
+const cors = require("cors");
+const { ObjectId } = require("mongodb");
+const dotenv = require("dotenv").config();
 
-const app = express()
+// const fs = require("fs");
+// const multer = require("multer");
+// const path = require("path");
+// const upload = multer({ dest: "public/clothing" });
 
-require('dotenv').config()
+const app = express();
+const port = 3000;
+app.use(cors());
+app.use(express.json());
+app.listen(port, () => console.log(`Server is running on port ${port}`));
 
-app.use(express.json())
+//  API's //
 
-const connectDB = require('./connectMongo')
+//home
+app.get("/api/home", async (req, res) => {
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const items = db.collection("items");
+  try {
+    const result = await items.find({}).toArray();
+    return res.json(result);
+  } catch (error) {
+    console.log(error);
+  } finally {
+    await close();
+  }
+});
 
-connectDB()
+//item
+app.get("/api/item/:id", async (req, res) => {
+  const id = req.params.id;
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const items = db.collection("items");
+  try {
+    const result = await items.findOne({ id });
+    return res.json(result);
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
 
-const BookModel = require('./models/book.model')
-
-app.get('/api/v1/books', async (req, res) => {
-
-    const { limit = 5, orderBy = 'name', sortBy = 'asc', keyword } = req.query
-    let page = +req.query?.page
-
-    if (!page || page <= 0) page = 1
-
-    const skip = (page - 1) * +limit
-
-    const query = {}
-
-    if (keyword) query.name = { "$regex": keyword, "$options": "i" }
-
-    try {
-        const data = await BookModel.find(query).skip(skip).limit(limit).sort({[orderBy]: sortBy})
-        const totalItems = await BookModel.countDocuments(query)
-        return res.status(200).json({
-            msg: 'Ok',
-            data,
-            totalItems,
-            totalPages: Math.ceil(totalItems / limit),
-            limit: +limit,
-            currentPage: page
-        })
-    } catch (error) {
-        return res.status(500).json({
-            msg: error.message
-        })
+//order
+app.post("/api/order", async (req, res) => {
+  const { user, cart } = await req.body();
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const orders = db.collection("orders");
+  try {
+    const available = await orders.findOne({ id: user.id });
+    if (!available) {
+      const insert = await orders.insertOne({ id: user.id, order: [cart] });
+      return res.json(insert);
     }
-})
+    const availableOrders = available.order;
+    return (
+      res,
+      json(
+        await orders.updateOne(
+          { id: user.id },
+          { $set: { order: [...availableOrders, cart] } }
+        )
+      )
+    );
+  } catch (error) {
+    console.log(error);
+    throw error;
+  } finally {
+    await close();
+  }
+});
+app.get("/api/order", async (req, res) => {
+  const id = req.query.id;
 
-app.get('/api/v1/books/:id', async (req, res) => {
-    try {
-        const data = await BookModel.findById(req.params.id)
+  const { connect, close, db } = await ConnectToDatabase();
 
-        if (data) {
-            return res.status(200).json({
-                msg: 'Ok',
-                data
-            })
-        }
+  await connect();
 
-        return res.status(404).json({
-            msg: 'Not Found',
-        })
-    } catch (error) {
-        return res.status(500).json({
-            msg: error.message
-        })
-    }
-})
+  const orders = db.collection("orders");
 
-app.post('/api/v1/books', async (req, res) => {
-    try {
-        const { name, author, price, description } = req.body
-        const book = new BookModel({
-            name, author, price, description
-        })
-        const data = await book.save()
-        return res.status(200).json({
-            msg: 'Ok',
-            data
-        })
-    } catch (error) {
-        return res.status(500).json({
-            msg: error.message
-        })
-    }
-})
+  try {
+    const order = await orders.findOne({ id });
 
-app.put('/api/v1/books/:id', async (req, res) => {
-    try {
-        const { name, author, price, description } = req.body
-        const { id } = req.params
+    return res.json(order);
+  } catch (error) {
+    console.log(error);
+    throw error;
+  } finally {
+    await close();
+  }
+});
 
-        const data = await BookModel.findByIdAndUpdate(id, {
-            name, author, price, description
-        }, { new: true })
+//search
+app.get("/api/search", async (req, res) => {
+  const { q, category } = req.query;
+  const { connect, close, db } = await ConnectToDatabase();
+  connect();
+  const items = db.collection("items");
 
-        return res.status(200).json({
-            msg: 'Ok',
-            data
-        })
-    } catch (error) {
-        return res.status(500).json({
-            msg: error.message
-        })
-    }
-})
+  try {
+    let filter = {};
+    if (q)
+      filter = {
+        $or: [
+          { title: q },
+          { tags: q },
+          { colors: { $elemMatch: { $or: [{ enTitle: q }, { title: q }] } } },
+        ],
+      };
+    const result = await items.find(filter).toArray();
+    return res.json(result);
+  } catch (error) {
+    console.log(error);
+  } finally {
+    await close();
+  }
+});
 
-app.delete('/api/v1/books/:id', async (req, res) => {
-    try {
-        await BookModel.findByIdAndDelete(req.params.id)
-        return res.status(200).json({
-            msg: 'Ok',
-        })
-    } catch (error) {
-        return res.status(500).json({
-            msg: error.message
-        })
-    }
-})
+//login
+app.post("/api/auth/login", async (req, res) => {
+  const data = req.body;
+  if (!data) return res.json("اشکال در دریافت اطلاعات کاربر");
+  const { email, password } = data;
 
-const PORT = process.env.PORT
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const users = db.collection("users");
 
-app.listen(PORT, () => {
-    console.log("Server is running on port " + PORT)
-})
+  try {
+    const user = await users.findOne({ email, password });
+    if (!user) return res.json({ status: "not correct" });
+    return res.json({
+      status: "success",
+      user: { ...user, password: "" },
+    });
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
+
+//signup
+app.post("/api/auth/signup", async (req, res) => {
+  const data = await req.body;
+  const { db, close, connect } = await ConnectToDatabase();
+  await connect();
+
+  const users = db.collection("users");
+  const notUnique = await users.findOne({ email: data.email });
+  if (notUnique)
+    return res.json({
+      message: "ایمیل شما قبلا در سیستم ثبت شده است",
+      status: "not unique",
+    });
+
+  try {
+    const user = await users.insertOne(data);
+    if (user)
+      return res.json({
+        status: "success",
+        data: { ...data, password: "" },
+      });
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
+
+//profile
+app.post("/api/auth/profile", async (req, res) => {
+  const data = await req.body;
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const users = db.collection("users");
+
+  if (!data) return res.json("اشکال در دریافت اطلاعات کاربر");
+  const { id } = data;
+  try {
+    const user = await users.findOne({ id });
+    if (!user) return res.json({ status: "not correct" });
+    return res.json({ user: { ...user, password: "" } });
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
+app.get("/api/auth/profile/:id", async (req, res) => {
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const users = db.collection("users");
+
+  const { id } = req.params;
+  if (!id) return res.json("اشکال در دریافت اطلاعات کاربر");
+
+  try {
+    const user = await users.findOne({ _id: ObjectId(id) });
+    if (!user) return res.json({ status: "not correct" });
+    return res.json({ user: { ...user, password: "" } });
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
+app.put("/api/auth/profile", async (req, res) => {
+  const data = await req.body;
+  const { connect, close, db } = await ConnectToDatabase();
+  await connect();
+  const users = db.collection("users");
+  if (!data) return res.json("اشکال در دریافت اطلاعات کاربر");
+  const { email, password } = data;
+
+  try {
+    const user = await users.findOne({ email });
+    if (password !== user?.password) return res.json("not correct");
+    const updatedData = data.newPassword
+      ? { ...data, password: data.newPassword }
+      : { ...data };
+    const { value } = await users.findOneAndUpdate(
+      { email },
+      { $set: { ...updatedData } },
+      { returnDocument: "after" }
+    );
+    if (!value) throw new Error();
+    return res.json({ user: { ...value, password: "" } });
+  } catch (error) {
+    throw error;
+  } finally {
+    await close();
+  }
+});
+
+//admin
+
+// //add item
+// app.post("/api/auth/admin", async (req, res) => {
+//   const { item } = await req.body;
+//   if (!item)
+//     return res.status(400).json("Error in receiving product information");
+
+//   const { connect, close, db } = await ConnectToDatabase();
+//   await connect();
+//   const items = db.collection("items");
+
+//   const lastItem = await items.find().sort({ id: -1 }).limit(1).toArray();
+//   const lastItemId = lastItem.length > 0 ? Number(lastItem[0].id) : 0;
+//   const data = { ...item, id: (lastItemId + 1).toString() };
+
+//   try {
+//     const result = await items.insertOne(data);
+//     return res.status(200).json(result);
+//   } catch (error) {
+//     throw error;
+//   } finally {
+//     await close();
+//   }
+// });
+
+// //item upload img
+// app.post("/api/auth/admin/upload", upload.array("images"), async (req, res) => {
+//   try {
+//     const urls = req.files.map((file) => {
+//       const extension = path.extname(file.originalname);
+//       const newName = `${Date.now()}${extension}`;
+//       const newPath = `/clothing/${newName}`;
+//       fs.renameSync(file.path, `public${newPath}`);
+//       return newPath;
+//     });
+//     return res.json({ ...urls });
+//   } catch (error) {
+//     console.error("Error uploading files:", error);
+//     return res.json({ error: "Failed to upload files" });
+//   }
+// });
+
+module.exports = app;
