@@ -1,4 +1,5 @@
 const { MongoClient } = require("mongodb");
+const dotenv = require("dotenv").config();
 
 const MONGODB_URI = process.env.MONGODB_CONNECT_URI;
 let cachedClient = null;
