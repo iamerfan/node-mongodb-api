@@ -10,7 +10,7 @@ const dotenv = require("dotenv").config();
 // const upload = multer({ dest: "public/clothing" });
 
 const app = express();
-const port = 3000;
+const port = 3001;
 app.use(cors());
 app.use(express.json());
 app.listen(port, () => console.log(`Server is running on port ${port}`));
@@ -55,9 +55,10 @@ app.post("/api/order", async (req, res) => {
   await connect();
   const orders = db.collection("orders");
   try {
-    const available = await orders.findOne({ id: user.id });
+    const _id = new ObjectId(user.id);
+    const available = await orders.findOne({ id: _id });
     if (!available) {
-      const insert = await orders.insertOne({ id: user.id, order: [cart] });
+      const insert = await orders.insertOne({ id: _id, order: [cart] });
       return res.json(insert);
     }
     const availableOrders = available.order;
@@ -65,7 +66,7 @@ app.post("/api/order", async (req, res) => {
       res,
       json(
         await orders.updateOne(
-          { id: user.id },
+          { id: _id },
           { $set: { order: [...availableOrders, cart] } }
         )
       )
@@ -177,24 +178,6 @@ app.post("/api/auth/signup", async (req, res) => {
 });
 
 //profile
-app.post("/api/auth/profile", async (req, res) => {
-  const data = await req.body;
-  const { connect, close, db } = await ConnectToDatabase();
-  await connect();
-  const users = db.collection("users");
-
-  if (!data) return res.json("اشکال در دریافت اطلاعات کاربر");
-  const { id } = data;
-  try {
-    const user = await users.findOne({ id });
-    if (!user) return res.json({ status: "not correct" });
-    return res.json({ user: { ...user, password: "" } });
-  } catch (error) {
-    throw error;
-  } finally {
-    await close();
-  }
-});
 app.get("/api/auth/profile/:id", async (req, res) => {
   const { connect, close, db } = await ConnectToDatabase();
   await connect();
@@ -204,9 +187,10 @@ app.get("/api/auth/profile/:id", async (req, res) => {
   if (!id) return res.json("اشکال در دریافت اطلاعات کاربر");
 
   try {
-    const user = await users.findOne({ _id: ObjectId(id) });
+    const _id = new ObjectId(id);
+    const user = await users.findOne({ _id });
     if (!user) return res.json({ status: "not correct" });
-    return res.json({ user: { ...user, password: "" } });
+    return res.json({ ...user, password: "" });
   } catch (error) {
     throw error;
   } finally {
@@ -227,7 +211,7 @@ app.put("/api/auth/profile", async (req, res) => {
     const updatedData = data.newPassword
       ? { ...data, password: data.newPassword }
       : { ...data };
-    const { value } = await users.findOneAndUpdate(
+    const value = await users.findOneAndUpdate(
       { email },
       { $set: { ...updatedData } },
       { returnDocument: "after" }
