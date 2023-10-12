@@ -62,13 +62,10 @@ app.post("/api/order", async (req, res) => {
       return res.json(insert);
     }
     const availableOrders = available.order;
-    return (
-      res,
-      json(
-        await orders.updateOne(
-          { id: _id },
-          { $set: { order: [...availableOrders, cart] } }
-        )
+    return res.json(
+      await orders.updateOne(
+        { id: _id },
+        { $set: { order: [...availableOrders, cart] } }
       )
     );
   } catch (error) {
@@ -78,6 +75,7 @@ app.post("/api/order", async (req, res) => {
     await close();
   }
 });
+
 app.get("/api/order", async (req, res) => {
   const id = req.query.id;
 
