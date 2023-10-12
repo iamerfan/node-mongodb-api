@@ -50,12 +50,12 @@ app.get("/api/item/:id", async (req, res) => {
 
 //order
 app.post("/api/order", async (req, res) => {
-  const { user, cart } = await req.body();
+  const { user, cart } = await req.body;
   const { connect, close, db } = await ConnectToDatabase();
   await connect();
   const orders = db.collection("orders");
   try {
-    const _id = new ObjectId(user.id);
+    const _id = new ObjectId(user._id);
     const available = await orders.findOne({ id: _id });
     if (!available) {
       const insert = await orders.insertOne({ id: _id, order: [cart] });
@@ -77,7 +77,7 @@ app.post("/api/order", async (req, res) => {
 });
 
 app.get("/api/order", async (req, res) => {
-  const id = req.query.id;
+  const id = req.query.id.toString();
 
   const { connect, close, db } = await ConnectToDatabase();
 
@@ -86,8 +86,7 @@ app.get("/api/order", async (req, res) => {
   const orders = db.collection("orders");
 
   try {
-    const order = await orders.findOne({ id });
-
+    const order = await orders.findOne({ id: new ObjectId(id) });
     return res.json(order);
   } catch (error) {
     console.log(error);
