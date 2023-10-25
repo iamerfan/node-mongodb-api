@@ -1,16 +1,11 @@
+require("dotenv").config();
 const express = require("express");
 const { ConnectToDatabase } = require("./connectMongo");
 const cors = require("cors");
 const { ObjectId } = require("mongodb");
-const dotenv = require("dotenv").config();
-
-// const fs = require("fs");
-// const multer = require("multer");
-// const path = require("path");
-// const upload = multer({ dest: "public/clothing" });
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.listen(port, () => console.log(`Server is running on port ${port}`));
@@ -223,46 +218,5 @@ app.put("/api/auth/profile", async (req, res) => {
 });
 
 //admin
-
-// //add item
-// app.post("/api/auth/admin", async (req, res) => {
-//   const { item } = await req.body;
-//   if (!item)
-//     return res.status(400).json("Error in receiving product information");
-
-//   const { connect, close, db } = await ConnectToDatabase();
-//   await connect();
-//   const items = db.collection("items");
-
-//   const lastItem = await items.find().sort({ id: -1 }).limit(1).toArray();
-//   const lastItemId = lastItem.length > 0 ? Number(lastItem[0].id) : 0;
-//   const data = { ...item, id: (lastItemId + 1).toString() };
-
-//   try {
-//     const result = await items.insertOne(data);
-//     return res.status(200).json(result);
-//   } catch (error) {
-//     throw error;
-//   } finally {
-//     await close();
-//   }
-// });
-
-// //item upload img
-// app.post("/api/auth/admin/upload", upload.array("images"), async (req, res) => {
-//   try {
-//     const urls = req.files.map((file) => {
-//       const extension = path.extname(file.originalname);
-//       const newName = `${Date.now()}${extension}`;
-//       const newPath = `/clothing/${newName}`;
-//       fs.renameSync(file.path, `public${newPath}`);
-//       return newPath;
-//     });
-//     return res.json({ ...urls });
-//   } catch (error) {
-//     console.error("Error uploading files:", error);
-//     return res.json({ error: "Failed to upload files" });
-//   }
-// });
 
 module.exports = app;
